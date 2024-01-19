@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package com.codespade.proto;
+option go_package = "github.com/codespade/grpc-server/pb";
+
+service Employee {
+    rpc GetById(GetByIdRequest) returns (GetByIdResponse){}
+}
+
+message GetByIdRequest {
+    int64 id = 1;
+}
+
+message GetByIdResponse {
+    int64 id = 1;
+    string name = 2;
+}
