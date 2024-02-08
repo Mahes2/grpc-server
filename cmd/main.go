@@ -15,7 +15,10 @@ import (
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/selector"
+	"github.com/grpc-server/infra/redis"
 	"github.com/grpc-server/pb"
+	"github.com/grpc-server/server"
+	"github.com/grpc-server/server/interceptor/ratelimit"
 	"github.com/grpc-server/services/employee"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
@@ -29,9 +32,14 @@ var (
 	rpcLogger log.Logger
 )
 
+func Init() {
+	redis.NewClient()
+}
+
 func main() {
 	logger := log.NewLogfmtLogger(os.Stderr)
 	rpcLogger = log.With(logger, "service", "gRPC/server", "component", "grpc-example")
+	l := ratelimit.NewLimiter(2)
 
 	s := grpc.NewServer(grpc.ChainUnaryInterceptor(
 		// Order matters e.g. tracing interceptor have to create span first for the later exemplars to work.
@@ -49,6 +57,7 @@ func main() {
 			auth.UnaryServerInterceptor(authenticator),
 			selector.MatchFunc(authMatcher),
 		),
+		ratelimit.UnaryServerInterceptor(l),
 		recovery.UnaryServerInterceptor(recovery.WithRecoveryHandler(recoveryHandler)),
 	))
 
@@ -81,6 +90,7 @@ func authenticator(ctx context.Context) (context.Context, error) {
 		return nil, status.Error(codes.Unauthenticated, "invalid auth token")
 	}
 	// NOTE: You can also pass the token in the context for further interceptors or gRPC service code.
+	ctx = context.WithValue(ctx, server.TokenContextKey, token)
 	return ctx, nil
 }
 
